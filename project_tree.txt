@@ -1,0 +1,8 @@
+D://HII/shared_rain_service.py/
+├─ data
+│  └─ analog_years.csv
+├─ __init__.py
+├─ .gitignore
+├─ analog_year_service.py
+├─ config.py
+└─ path_builder.py

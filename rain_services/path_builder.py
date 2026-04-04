@@ -1,7 +1,7 @@
-# src/core/path_builder.py
+# rain_services\path_builder.py
 from pathlib import Path
-import config
-from analog_year_service import AnalogYearService
+from rain_services import config
+from rain_services.analog_year_service import AnalogYearService
 
 class RainPathBuilder:
     def __init__(self, analog_service: AnalogYearService):
@@ -14,6 +14,29 @@ class RainPathBuilder:
         """ค่าเฉลี่ย 30 ปี รายปี (ชื่อไฟล์คงที่)"""
         return config.AVG30Y_DIR / "avg30y_update202111.png"
 
+    def build_avg30y_monthly(
+        self,
+        month: int,
+        area: str = "region",
+        version_tag: str = "202111",
+    ) -> Path:
+        """
+        ค่าเฉลี่ย 30 ปี รายเดือน
+        month      : 1–12
+        area       : "region" | "basin" | "country"
+        version_tag: ระบุรุ่นของ dataset (default "202111" = อัปเดต พ.ย. 2564)
+                     เปลี่ยนเมื่อมีการอัปเดต baseline ใหม่ในอนาคต
+        """
+        area_dir_map = {
+            "region":  config.AVG30Y_REGION_DIR,
+            "basin":   config.AVG30Y_BASIN_DIR,
+            "country": config.AVG30Y_COUNTRY_DIR,
+        }
+        base_dir = area_dir_map.get(area)
+        if base_dir is None:
+            raise ValueError(f"build_avg30y_monthly: ไม่รองรับ area='{area}'")
+        return base_dir / f"avg30y_{month:02d}_update{version_tag}.png"
+
     # ==========================================
     # 2. ฝนคาดการณ์ สสน. (อิงปีเหมือนจาก csv)
     # ==========================================
@@ -25,16 +48,29 @@ class RainPathBuilder:
 
     def build_hii_forecast_path(self, init_year: int, init_month: int, target_year: int, target_month: int, is_diff: bool = False, area: str = "region") -> Path:
         """สร้าง Path ฝนคาดการณ์ สสน. 1 ภาพ (อิงปีเหมือน)"""
-        # ดึงปีเหมือนที่เป็นฐาน 
         analog_base_year = self.analog_service.get_analog_year(init_year, init_month)
-        
-        # คำนวณปี analog สำหรับเป้าหมาย (รองรับกรณี target_year ข้ามปีไปแล้ว)
         current_analog_year = analog_base_year + (target_year - init_year)
-        
+
+        if area == "country":
+            # Country-level files have a variable rainfall-amount suffix, e.g. o_th200103_35.03.png
+            # Anomaly files live under OBS_ANOMALY_DIR with a 'd' infix, e.g. o_th200103d_5.1.png
+            base_dir = config.OBS_ANOMALY_DIR if is_diff else config.OBS_COUNTRY_DIR
+            year_dir = base_dir / str(current_analog_year)
+            prefix = f"o_th{current_analog_year}{target_month:02d}"
+            if is_diff:
+                candidates = sorted(year_dir.glob(f"{prefix}d*.png"))
+            else:
+                candidates = sorted(
+                    f for f in year_dir.glob(f"{prefix}*.png")
+                    if not f.stem[len(prefix):].startswith("d")
+                )
+            if not candidates:
+                return year_dir / f"{prefix}{'d' if is_diff else ''}.png"
+            return candidates[0]
+
         base_dir = config.OBS_REGION_DIR if area == "region" else config.OBS_BASIN_DIR
         suffix = "d" if is_diff else ""
         filename = f"o_th{current_analog_year}{target_month:02d}{suffix}.png"
-        
         return base_dir / str(current_analog_year) / filename
 
     # ==========================================
@@ -43,13 +79,18 @@ class RainPathBuilder:
     def build_onemap_path(self, init_year: int, init_month: int, target_year: int, target_month: int, model_type: str = "MFCST", is_diff: bool = False, area: str = "region") -> Path:
         """
         สร้าง Path ฝนคาดการณ์ One Map 1 ภาพ
-        model_type: MFCST (Mean), UFCST (Upper), LFCST (Lower)
+        model_type: MFCST (Mean/Weighted → OM_W), UFCST (Upper), LFCST (Lower)
         """
-        base_dir = config.ONEMAP_REGION_DIR if area == "region" else config.ONEMAP_BASIN_DIR
         parent_folder = f"{init_year}{init_month:02d}"
         suffix = "d" if is_diff else ""
-        
-        filename = f"OM_{model_type}_{target_year}{target_month:02d}{suffix}.png"
+
+        if model_type == "MFCST":
+            base_dir = config.ONEMAP_WEIGHT_REGION_DIR if area == "region" else config.ONEMAP_WEIGHT_BASIN_DIR
+            filename = f"OM_WFCST_{target_year}{target_month:02d}{suffix}.png"
+        else:
+            base_dir = config.ONEMAP_REGION_DIR if area == "region" else config.ONEMAP_BASIN_DIR
+            filename = f"OM_{model_type}_{target_year}{target_month:02d}{suffix}.png"
+
         return base_dir / parent_folder / filename
 
     # ==========================================
@@ -71,31 +112,75 @@ class RainPathBuilder:
         return base_dir / parent_folder / filename
 
     # ==========================================
-    # 5. ฝนตรวจวัด 
+    # 5. ฝนตรวจวัด
     # ==========================================
     def build_obs_path(self, target_year: int, target_month: int, is_diff: bool = False, area: str = "region") -> Path:
-        """ฝนตรวจวัดรายเดือน หรือ ผลต่างเทียบค่าเฉลี่ย 30 ปี"""
-        base_dir = config.OBS_REGION_DIR if area == "region" else config.OBS_BASIN_DIR
+        """ฝนตรวจวัดรายเดือน หรือ ผลต่างเทียบค่าเฉลี่ย 30 ปี
+        area: "region" | "basin" | "country"
+        country diff → picture_anomaly; country regular → picture_observation
+        """
+        if area == "country":
+            base_dir = config.OBS_ANOMALY_DIR if is_diff else config.OBS_COUNTRY_DIR
+        elif area == "basin":
+            base_dir = config.OBS_BASIN_DIR
+        else:
+            base_dir = config.OBS_REGION_DIR
         suffix = "d" if is_diff else ""
         filename = f"o_th{target_year}{target_month:02d}{suffix}.png"
         return base_dir / str(target_year) / filename
+
+    def build_obs_yearly(self, target_year: int, area: str = "country") -> Path:
+        """
+        ฝนตรวจวัดรายปี — รองรับชื่อไฟล์ที่มีหรือไม่มี suffix ปริมาณฝน
+        เช่น o_th2025.png หรือ o_th2025_1639.4.png
+
+        ค้นหาโดย glob แล้วคืนไฟล์แรกที่เจอ (เรียงตามชื่อ)
+        ยกเว้นไฟล์ผลต่าง (o_th{year}d*.png)
+        หากไม่พบไฟล์ใดเลย คืน fallback path เพื่อให้ caller ได้รับ error ที่ชัดเจนจาก image_handler
+        """
+        area_dir_map = {
+            "country": config.OBS_COUNTRY_DIR,
+        }
+        base_dir = area_dir_map.get(area)
+        if base_dir is None:
+            raise ValueError(f"build_obs_yearly: ไม่รองรับ area='{area}'")
+
+        year_dir = base_dir / str(target_year)
+        prefix = f"o_th{target_year}"
+
+        candidates = sorted(
+            f for f in year_dir.glob(f"{prefix}*.png")
+            # exclude diff files: the character right after the year number must not be 'd'
+            if not f.stem[len(prefix):].startswith("d")
+        )
+
+        if not candidates:
+            # fallback — image_handler will log a file-not-found error
+            return year_dir / f"{prefix}.png"
+
+        return candidates[0]
 
     # ==========================================
     # 6. ผลต่างเทียบฝนตรวจวัด (รายเดือน และ กรณีพิเศษรายปี)
     # ==========================================
     def build_diff_obs_vs_forecast_path(self, target_year: int, target_month: int, model: str) -> Path:
         """
-        ผลต่าง ฝนตรวจวัด vs คาดการณ์ (สสน, อุตุฯ, One Map)
+        ผลต่าง ฝนตรวจวัด vs คาดการณ์ (สสน, อุตุฯ, One Map Weighted)
         model: "HII", "TMD", "OM"
         """
-        filename = f"o_th{target_year}{target_month:02d}d{model}-region.png"
-        
+        suffix_map = {
+            "HII": "dHII",
+            "TMD": "dTMD",
+            "OM":  "dOM_WFCST",
+        }
         folder_map = {
             "HII": "Observe_HIIforecast",
             "TMD": "Observe_TMDforecast",
-            "OM": "Observe_OMforecast"
+            "OM":  "Observe_OMforecast",
         }
+        suffix = suffix_map.get(model, f"d{model}")
         subfolder = folder_map.get(model, "")
+        filename = f"o_th{target_year}{target_month:02d}{suffix}.png"
         return config.DIFF_REGION_DIR / subfolder / str(target_year) / filename
 
     def build_diff_obs_yearly_jan_report(self, obs_year: int, report_year: int, compare_to: str = "HII") -> Path:
@@ -165,7 +250,7 @@ if __name__ == "__main__":
     # ------------------------------------------
     print(f"ตรวจวัด vs สสน. (ม.ค. 2026): {builder.build_diff_obs_vs_forecast_path(2026, 1, 'HII')}")
     print(f"ตรวจวัด vs อุตุฯ (ก.พ. 2026): {builder.build_diff_obs_vs_forecast_path(2026, 2, 'TMD')}")
-    print(f"ตรวจวัด vs One Map (ธ.ค. 2025): {builder.build_diff_obs_vs_forecast_path(2025, 12, 'OM')}")
+    print(f"ตรวจวัด vs One Map Weighted (ธ.ค. 2025): {builder.build_diff_obs_vs_forecast_path(2025, 12, 'OM')}")
 
     # ------------------------------------------
     print("\n[6] กรณีพิเศษ: รายงานฉบับ ม.ค. (ผลต่างรายปี)")

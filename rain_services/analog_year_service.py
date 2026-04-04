@@ -1,12 +1,12 @@
 # ฟังก์ชันสำหรับอ่านปีเหมือนจาก CSV
 
-# src/core/analog_year_service.py
+# rain_services\analog_year_service.py
 import csv
 from pathlib import Path
 
 # หากรันจากโปรเจคย่อย สามารถ import config ได้
 # สมมติว่าโครงสร้างโปรเจคอยู่ในระดับเดียวกัน
-from config import ANALOG_YEARS_CSV_PATH
+from rain_services.config import ANALOG_YEARS_CSV_PATH
 
 class AnalogYearService:
     def __init__(self, csv_path: Path | str = ANALOG_YEARS_CSV_PATH):
