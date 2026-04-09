@@ -166,17 +166,17 @@ class RainPathBuilder:
     def build_diff_obs_vs_forecast_path(self, target_year: int, target_month: int, model: str) -> Path:
         """
         ผลต่าง ฝนตรวจวัด vs คาดการณ์ (สสน, อุตุฯ, One Map Weighted)
-        model: "HII", "TMD", "OM"
+        model: "HII", "TMD", "OM_W"
         """
         suffix_map = {
-            "HII": "dHII",
-            "TMD": "dTMD",
-            "OM":  "dOM_WFCST",
+            "HII":  "dHII",
+            "TMD":  "dTMD",
+            "OM_W": "dOM_WFCST",
         }
         folder_map = {
-            "HII": "Observe_HIIforecast",
-            "TMD": "Observe_TMDforecast",
-            "OM":  "Observe_OMforecast",
+            "HII":  "Observe_HIIforecast",
+            "TMD":  "Observe_TMDforecast",
+            "OM_W": "Observe_OMforecast",
         }
         suffix = suffix_map.get(model, f"d{model}")
         subfolder = folder_map.get(model, "")
@@ -250,7 +250,7 @@ if __name__ == "__main__":
     # ------------------------------------------
     print(f"ตรวจวัด vs สสน. (ม.ค. 2026): {builder.build_diff_obs_vs_forecast_path(2026, 1, 'HII')}")
     print(f"ตรวจวัด vs อุตุฯ (ก.พ. 2026): {builder.build_diff_obs_vs_forecast_path(2026, 2, 'TMD')}")
-    print(f"ตรวจวัด vs One Map Weighted (ธ.ค. 2025): {builder.build_diff_obs_vs_forecast_path(2025, 12, 'OM')}")
+    print(f"ตรวจวัด vs One Map Weighted (ธ.ค. 2025): {builder.build_diff_obs_vs_forecast_path(2025, 12, 'OM_W')}")
 
     # ------------------------------------------
     print("\n[6] กรณีพิเศษ: รายงานฉบับ ม.ค. (ผลต่างรายปี)")

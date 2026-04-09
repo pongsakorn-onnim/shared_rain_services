@@ -68,6 +68,9 @@ DIFF_BASIN_EXCEL_DIR  = DIFF_OBS_FCST_DIR / "Basin" / "Excel"
 ONEMAP_REGION_CSV_DIR = ONEMAP_BASE_DIR / "region" / "csv_file"
 ONEMAP_BASIN_CSV_DIR  = ONEMAP_BASE_DIR / "basin"  / "csv_file"
 
+# --- 3.8 Extracted Excel fallback (output from extract_rain_to_excel) ---
+EXTRACT_RAIN_EXCEL_DIR = HII_DRIVE / "extract_rain_to_excel" / "outputs" / "extract"
+
 # --- 3.7 TMD Excel Monthly data (avg30y + observed monthly) ---
 _TMD_EXCEL_MONTHLY_DIR  = ONEDRIVE_DATA_DIR / r"Rainfall\Interpolation\TMD\Excel\Monthly"
 AVG30Y_REGION_CSV       = _TMD_EXCEL_MONTHLY_DIR / "avg30y_update202111" / "avg30y_2020_update202111_region.csv"
